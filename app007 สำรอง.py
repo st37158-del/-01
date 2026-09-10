@@ -257,17 +257,44 @@ def extract_binary_mask(img_bgr: np.ndarray, method: str, blur_kernel: int, land
     return gray, binary, float(thresh_val)
 
 
-def extract_clean_coastline(binary_mask: np.ndarray, denoise_kernel: int, keep_largest_only: bool) -> Optional[Dict[str, Any]]:
+def extract_clean_coastline(binary_mask: np.ndarray, denoise_kernel: int, keep_largest_only: bool,
+                            channel_sever_kernel: int = 0) -> Optional[Dict[str, Any]]:
     """
-    Clean binary mask using morphological filtering, fill internal holes (solid land),
-    and extract pure land-water interface without outer image frame border artifacts.
+    Clean binary mask using morphological filtering, sever inland water bodies (aquaculture
+    ponds, irrigation canals, tidal creeks) that are hydrologically connected to the open sea
+    through narrow channels, and extract the pure land-sea interface without outer image
+    frame border artifacts.
+
+    A pond linked to the sea by a thin canal is NOT an enclosed hole in the land mask — it is
+    part of the same connected water region as the sea, so cv2.findContours(RETR_EXTERNAL)
+    naturally traces the contour in and out around it, producing a false "shoreline" around
+    every such pond. Fixing this requires severing those channels on the WATER side (an
+    opening wide enough to break canals but narrower than the true open sea) before picking
+    the largest remaining water component as the real sea; everything else (real land AND any
+    inland ponds/canals) is then treated as land, matching the intended coastal-erosion use case.
     """
     h, w = binary_mask.shape[:2]
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (denoise_kernel, denoise_kernel))
     cleaned = cv2.morphologyEx(binary_mask, cv2.MORPH_OPEN, kernel)
     cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel)
 
-    contours, _ = cv2.findContours(cleaned, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    land_source = cleaned
+    if channel_sever_kernel and channel_sever_kernel >= 3:
+        water_raw = cv2.bitwise_not(cleaned)
+        sever_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (channel_sever_kernel, channel_sever_kernel))
+        water_severed = cv2.morphologyEx(water_raw, cv2.MORPH_OPEN, sever_kernel)
+
+        n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(water_severed, connectivity=8)
+        if n_labels > 1:
+            sea_label = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+            sea_mask = np.where(labels == sea_label, np.uint8(255), np.uint8(0))
+            # Restore the true sea boundary eroded away by the opening, without
+            # reconnecting the severed channels (clip back to the original water extent).
+            sea_mask = cv2.dilate(sea_mask, sever_kernel)
+            sea_mask = cv2.bitwise_and(sea_mask, water_raw)
+            land_source = cv2.bitwise_not(sea_mask)
+
+    contours, _ = cv2.findContours(land_source, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     if not contours:
         return None
 
@@ -592,6 +619,12 @@ denoise_kernel = st.sidebar.slider(
     min_value=3, max_value=25, value=9, step=2,
 )
 
+channel_sever_kernel = st.sidebar.slider(
+    "ระดับตัดขาดแหล่งน้ำภายใน (บ่อ/คลอง/นากุ้งที่เชื่อมกับทะเล)",
+    min_value=0, max_value=101, value=21, step=2,
+    help="บ่อเลี้ยงกุ้ง/นาเกลือ/คลองที่มีช่องทางเชื่อมกับทะเล (แม้เพียงไม่กี่พิกเซล) จะถูกนับเป็นส่วนเดียวกับทะเลและถูกลากเป็นแนวชายฝั่งปลอม ค่านี้ควรตั้งให้กว้างกว่าความกว้างของคลอง/ทางน้ำเชื่อมต่อในภาพ (พิกเซล) เพื่อตัดขาดออกจากทะเลจริงก่อนคำนวณ ตั้งเป็น 0 เพื่อปิดการทำงานนี้"
+)
+
 keep_largest_only = st.sidebar.checkbox(
     "เลือกเฉพาะแผ่นดินผืนหลัก (ตัดเกาะเล็ก/จุดกวนทิ้ง)",
     value=True,
@@ -653,7 +686,8 @@ else:
 # PROCESSING PIPELINE
 # ==============================================================================
 def run_pipeline(configs, blur_kernel, land_is_bright, segmentation_mode, max_dim,
-                 denoise_kernel, keep_largest_only, enable_alignment, n_transects, auto_crop_banner):
+                 denoise_kernel, keep_largest_only, enable_alignment, n_transects, auto_crop_banner,
+                 channel_sever_kernel):
     parsed_configs = []
     errors = []
 
@@ -715,7 +749,7 @@ def run_pipeline(configs, blur_kernel, land_is_bright, segmentation_mode, max_di
             current_bgr, segmentation_mode, blur_kernel, land_is_bright
         )
 
-        coast = extract_clean_coastline(binary_mask, denoise_kernel, keep_largest_only)
+        coast = extract_clean_coastline(binary_mask, denoise_kernel, keep_largest_only, channel_sever_kernel)
         if coast is None:
             errors.append(f"⚠️ ไม่พบแนวชายฝั่งในภาพ '{item['file_name']}' หลังการประมวลผล — ข้ามภาพนี้")
             continue
@@ -775,7 +809,8 @@ if analyze_clicked:
         with st.spinner("กำลังจัดตำแหน่งภาพ (Co-Registration) • สกัดแนวชายฝั่ง • สร้าง Virtual Transects • คำนวณ Fractal Dimension..."):
             res, errs, trans = run_pipeline(
                 image_configs, blur_kernel, land_is_bright, segmentation_mode, max_dim,
-                denoise_kernel, keep_largest_only, enable_alignment, n_transects, auto_crop_banner
+                denoise_kernel, keep_largest_only, enable_alignment, n_transects, auto_crop_banner,
+                channel_sever_kernel
             )
         st.session_state["results"] = res
         st.session_state["errors"] = errs
@@ -815,7 +850,7 @@ if st.session_state.get("processed"):
         with c1:
             st.image(r["display_img"], channels="BGR", caption=f"ภาพที่ประมวลผล{resize_info}", use_container_width=True)
         with c2:
-            st.image(r["cleaned_mask"], caption="มาสก์แผ่นดินผืนหลัก (Solid Land)", use_container_width=True)
+            st.image(r["filled_land"], caption="มาสก์แผ่นดินผืนหลัก (Solid Land)", use_container_width=True)
         with c3:
             st.image(r["overlay_img"], channels="BGR", caption="🟩 แนวชายฝั่งไร้ขอบเฟรม (True Shoreline)", use_container_width=True)
 
