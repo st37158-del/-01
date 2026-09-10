@@ -28,6 +28,7 @@ HOW TO RUN:
 ================================================================================
 """
 
+import re
 import warnings
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -76,6 +77,22 @@ def parse_date_input(text: str) -> Optional[date]:
         parsed = pd.to_datetime(text)
         return parsed.date()
     except Exception:
+        return None
+
+
+def extract_date_from_filename(filename: str) -> Optional[date]:
+    """
+    Best-effort parse of a leading YYYY-MM-DD date stamp from a filename, matching the
+    Copernicus Browser export naming convention, e.g.
+    '2025-12-21-00_00_2025-12-21-23_59_Sentinel-2_L2A_NDWI.jpg' -> 2025-12-21.
+    """
+    match = re.match(r"^(\d{4})-(\d{2})-(\d{2})", filename)
+    if not match:
+        return None
+    year, month, day = (int(g) for g in match.groups())
+    try:
+        return date(year, month, day)
+    except ValueError:
         return None
 
 
@@ -665,11 +682,17 @@ if uploaded_files:
         with st.expander(f"🖼️ ภาพที่ {i + 1}: {up_file.name}", expanded=(n_files <= 3)):
             col1, col2 = st.columns(2)
             with col1:
-                default_year = current_year - (n_files - 1 - i)
+                detected_date = extract_date_from_filename(up_file.name)
+                if detected_date is not None:
+                    default_date_str = detected_date.isoformat()
+                    st.caption(f"🔎 ตรวจพบวันที่จากชื่อไฟล์: **{default_date_str}**")
+                else:
+                    default_date_str = str(current_year - (n_files - 1 - i))
                 date_str = st.text_input(
                     "วันที่ / ปี (YYYY-MM-DD หรือ YYYY)",
-                    value=str(default_year),
+                    value=default_date_str,
                     key=f"date_input_{i}_{up_file.name}",
+                    help="ระบบดึงวันที่จากชื่อไฟล์ให้อัตโนมัติถ้าชื่อไฟล์ขึ้นต้นด้วย YYYY-MM-DD (รูปแบบไฟล์จาก Copernicus Browser) แก้ไขเองได้หากไม่ถูกต้อง",
                 )
             with col2:
                 scale_val = st.number_input(
