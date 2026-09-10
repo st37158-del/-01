@@ -404,14 +404,25 @@ def create_coastline_overlay(img_bgr: np.ndarray, shoreline_img: np.ndarray, col
 def robust_box_counting(binary_edge_img: np.ndarray) -> Optional[Dict[str, Any]]:
     """
     Computes Box-Counting Fractal Dimension with rigorous scaling window filtering.
-    Discards discretization noise (small r < 4) and sparse saturation (large r > min_dim/4).
+    Discards discretization noise (small r < 4) and sparse saturation (large r or box
+    counts too small to regress on reliably).
+
+    The scaling window is derived from the shoreline's own bounding-box extent, not the
+    full image frame. A coastline occupying only a corner of a mostly-empty frame would
+    otherwise let box sizes grow far past what the shoreline itself needs -- at that scale
+    a handful of giant boxes already cover the whole curve, so N(r) barely shrinks as r
+    grows and the regression slope (the FD estimate) gets biased low, sometimes below the
+    topological minimum of 1.0 for a connected curve.
     """
     bool_img = binary_edge_img > 0
     if not np.any(bool_img):
         return None
 
     h, w = bool_img.shape
-    min_dim = min(h, w)
+    ys, xs = np.where(bool_img)
+    extent_h = int(ys.max() - ys.min()) + 1
+    extent_w = int(xs.max() - xs.min()) + 1
+    min_dim = min(extent_h, extent_w)
 
     # Scaling window: from r=4 to r=min_dim//4 (powers of 2)
     box_sizes = []
@@ -422,7 +433,7 @@ def robust_box_counting(binary_edge_img: np.ndarray) -> Optional[Dict[str, Any]]
         size *= 2
 
     if len(box_sizes) < 3:
-        # Fallback to geometric spacing if image is small
+        # Fallback to geometric spacing if the shoreline's extent is small
         box_sizes = [int(s) for s in np.geomspace(4, max(8, min_dim // 3), num=5)]
         box_sizes = sorted(list(set(box_sizes)))
 
@@ -439,6 +450,14 @@ def robust_box_counting(binary_edge_img: np.ndarray) -> Optional[Dict[str, Any]]
     box_sizes_arr = np.array(box_sizes, dtype=np.float64)
     counts_arr = np.array(counts, dtype=np.float64)
 
+    # Drop box sizes whose count is too small to carry statistical weight in the fit --
+    # these sit in the saturated tail where a curve gets covered by a handful of giant
+    # boxes and would otherwise drag the slope down.
+    reliable = counts_arr >= 4
+    if reliable.sum() >= 3:
+        box_sizes_arr = box_sizes_arr[reliable]
+        counts_arr = counts_arr[reliable]
+
     log_inv_r = np.log(1.0 / box_sizes_arr)
     log_n = np.log(counts_arr)
 
@@ -449,8 +468,8 @@ def robust_box_counting(binary_edge_img: np.ndarray) -> Optional[Dict[str, Any]]
     r_squared = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else 1.0
 
     return {
-        "box_sizes": box_sizes,
-        "counts": counts,
+        "box_sizes": box_sizes_arr.astype(int).tolist(),
+        "counts": counts_arr.astype(int).tolist(),
         "log_inv_r": log_inv_r.tolist(),
         "log_n": log_n.tolist(),
         "fd": float(slope),
@@ -612,12 +631,16 @@ blur_kernel = st.sidebar.slider(
     help="ลดจุดรบกวนก่อนทำ Segmentation"
 )
 
-land_choice = st.sidebar.radio(
-    "พิกเซลสีไหนแทน 'แผ่นดิน' หลังทำ Threshold?",
-    ["สว่าง (255) = แผ่นดิน", "มืด (0) = แผ่นดิน"],
-    index=0,
-)
-land_is_bright = (land_choice == "สว่าง (255) = แผ่นดิน")
+if segmentation_mode == "Otsu Thresholding (Grayscale / NDWI)":
+    land_choice = st.sidebar.radio(
+        "พิกเซลสีไหนแทน 'แผ่นดิน' หลังทำ Threshold?",
+        ["สว่าง (255) = แผ่นดิน", "มืด (0) = แผ่นดิน"],
+        index=0,
+    )
+    land_is_bright = (land_choice == "สว่าง (255) = แผ่นดิน")
+else:
+    # HSV mode classifies land/water by hue directly, so brightness polarity doesn't apply.
+    land_is_bright = True
 
 denoise_kernel = st.sidebar.slider(
     "ระดับลด Noise และเติมเต็มแผ่นดิน (Denoise Kernel Size)",
@@ -743,11 +766,13 @@ def run_pipeline(configs, blur_kernel, land_is_bright, segmentation_mode, max_di
     # Chronological sort (Earliest image becomes the Reference Baseline t0)
     parsed_configs.sort(key=lambda x: x["decimal_year"])
     ref_image_bgr = parsed_configs[0]["img_bgr"]
+    ref_scale = parsed_configs[0]["scale"]
 
     results = []
 
     for idx, item in enumerate(parsed_configs):
         current_bgr = item["img_bgr"]
+        current_scale = item["scale"]
         align_msg = "ภาพฐานอ้างอิง (Baseline)"
 
         # Apply ORB Homography Alignment if enabled and not the reference image
@@ -755,6 +780,9 @@ def run_pipeline(configs, blur_kernel, land_is_bright, segmentation_mode, max_di
             aligned_bgr, success, align_msg = align_image_orb(current_bgr, ref_image_bgr)
             if success:
                 current_bgr = aligned_bgr
+                # Warped onto the reference's pixel grid, so the reference's scale now
+                # applies -- the image's own pre-alignment scale no longer matches its pixels.
+                current_scale = ref_scale
 
         gray, binary_mask, otsu_val = extract_binary_mask(
             current_bgr, segmentation_mode, blur_kernel, land_is_bright
@@ -776,7 +804,7 @@ def run_pipeline(configs, blur_kernel, land_is_bright, segmentation_mode, max_di
             "file_name": item["file_name"],
             "date": item["date"],
             "decimal_year": item["decimal_year"],
-            "scale_m_per_px": item["scale"],
+            "scale_m_per_px": current_scale,
             "align_status": align_msg,
             "original_shape": item["orig_shape"],
             "processed_shape": item["new_shape"],
