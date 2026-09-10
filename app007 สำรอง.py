@@ -581,17 +581,6 @@ st.set_page_config(
 st.title("เครื่องมือวิเคราะห์การกัดเซาะ/การงอกของชายฝั่ง")
 st.caption("ระบบวัดแนวชายฝั่งด้วย Virtual Transects (DSAS Standard) ร่วมกับ Box-Counting Fractal Complexity Engine")
 
-with st.expander("สถาปัตยกรรมและการปรับปรุงใหม่ใน v5.0 (Engineering & Scientific Highlights)", expanded=False):
-    st.markdown(
-        r"""
-### สิ่งที่ได้รับการแก้ไขและพัฒนาให้ถูกต้องตามหลักวิศวกรรมในเวอร์ชันนี้:
-1. **Auto-Alignment (Co-registration):** นำอัลกอริทึม **ORB Feature Matching + Homography** มาล็อกพิกัดภาพทุกช่วงเวลาให้ตรงกับภาพฐานปีแรก ป้องกันการวัดระยะทางเพี้ยนจากการที่ภาพขยับหรือครอปไม่เท่ากัน
-2. **ขจัดเส้นขอบกรอบภาพปลอม (Zero Border Artifacts):** ใช้เทคนิคทางสัณฐานวิทยา (Morphology) สกัดเฉพาะแนวรอยต่อระหว่างแผ่นดินกับน้ำทะเลจริง โดยตัดขอบสี่เหลี่ยมของเฟรมภาพและแหล่งน้ำภายในแผ่นดินทิ้ง 100% ทำให้ค่าความยาวชายฝั่งและ Fractal Dimension แม่นยำ
-3. **ระบบ Virtual Transects (ตามหลักสากล USGS DSAS):** ยกเลิกสูตร *พื้นที่/ความยาว* เดิมที่ขัดแย้งกับหลัก Coastline Paradox แล้วเปลี่ยนมาเป็นการตัดเส้นตั้งฉากจำลอง (Virtual Transects) วัดระยะถอยร่น/รุกล้ำ พร้อมรายงานค่าความไม่แน่นอนทางสถิติ ($\pm\sigma$), จุดวิกฤตกัดเซาะสูงสุด และอัตราการเปลี่ยนแปลงเฉลี่ยต่อปี (EPR)
-4. **Box-Counting Fractal Rigor:** ตัดช่วง Discretization Noise ($r < 4$) และช่วงอิ่มตัว ($r > \min(H, W)/4$) ทำให้ค่า Fractal Dimension (FD) สะท้อนความซับซ้อนเรขาคณิต (Morphological Complexity) อย่างแท้จริง
-        """
-    )
-
 
 # ==============================================================================
 # SIDEBAR — PROCESSING PARAMETERS
