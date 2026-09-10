@@ -575,17 +575,16 @@ def classify_change(distance_m: float) -> str:
 # ==============================================================================
 st.set_page_config(
     page_title=f"เครื่องมือวิเคราะห์การกัดเซาะชายฝั่ง — v{APP_VERSION}",
-    page_icon="🌊",
     layout="wide",
 )
 
-st.title(f"🌊 เครื่องมือวิเคราะห์การกัดเซาะ/การงอกของชายฝั่ง (v{APP_VERSION})")
+st.title("เครื่องมือวิเคราะห์การกัดเซาะ/การงอกของชายฝั่ง")
 st.caption("ระบบวัดแนวชายฝั่งด้วย Virtual Transects (DSAS Standard) ร่วมกับ Box-Counting Fractal Complexity Engine")
 
-with st.expander("ℹ️ สถาปัตยกรรมและการปรับปรุงใหม่ใน v5.0 (Engineering & Scientific Highlights)", expanded=False):
+with st.expander("สถาปัตยกรรมและการปรับปรุงใหม่ใน v5.0 (Engineering & Scientific Highlights)", expanded=False):
     st.markdown(
         r"""
-### 🔬 สิ่งที่ได้รับการแก้ไขและพัฒนาให้ถูกต้องตามหลักวิศวกรรมในเวอร์ชันนี้:
+### สิ่งที่ได้รับการแก้ไขและพัฒนาให้ถูกต้องตามหลักวิศวกรรมในเวอร์ชันนี้:
 1. **Auto-Alignment (Co-registration):** นำอัลกอริทึม **ORB Feature Matching + Homography** มาล็อกพิกัดภาพทุกช่วงเวลาให้ตรงกับภาพฐานปีแรก ป้องกันการวัดระยะทางเพี้ยนจากการที่ภาพขยับหรือครอปไม่เท่ากัน
 2. **ขจัดเส้นขอบกรอบภาพปลอม (Zero Border Artifacts):** ใช้เทคนิคทางสัณฐานวิทยา (Morphology) สกัดเฉพาะแนวรอยต่อระหว่างแผ่นดินกับน้ำทะเลจริง โดยตัดขอบสี่เหลี่ยมของเฟรมภาพและแหล่งน้ำภายในแผ่นดินทิ้ง 100% ทำให้ค่าความยาวชายฝั่งและ Fractal Dimension แม่นยำ
 3. **ระบบ Virtual Transects (ตามหลักสากล USGS DSAS):** ยกเลิกสูตร *พื้นที่/ความยาว* เดิมที่ขัดแย้งกับหลัก Coastline Paradox แล้วเปลี่ยนมาเป็นการตัดเส้นตั้งฉากจำลอง (Virtual Transects) วัดระยะถอยร่น/รุกล้ำ พร้อมรายงานค่าความไม่แน่นอนทางสถิติ ($\pm\sigma$), จุดวิกฤตกัดเซาะสูงสุด และอัตราการเปลี่ยนแปลงเฉลี่ยต่อปี (EPR)
@@ -597,7 +596,7 @@ with st.expander("ℹ️ สถาปัตยกรรมและการป�
 # ==============================================================================
 # SIDEBAR — PROCESSING PARAMETERS
 # ==============================================================================
-st.sidebar.header("⚙️ พารามิเตอร์การประมวลผล")
+st.sidebar.header("พารามิเตอร์การประมวลผล")
 
 enable_alignment = st.sidebar.checkbox(
     "เปิดใช้ Auto-Alignment (ORB Feature Matching)",
@@ -663,7 +662,7 @@ max_dim = st.sidebar.slider(
 # ==============================================================================
 # FILE UPLOAD & PER-IMAGE METADATA INPUT
 # ==============================================================================
-st.subheader("📤 1. อัปโหลดภาพชายฝั่งหลายช่วงเวลา")
+st.subheader("1. อัปโหลดภาพชายฝั่งหลายช่วงเวลา")
 
 uploaded_files = st.file_uploader(
     "อัปโหลดภาพถ่ายดาวเทียม/ภาพถ่ายทางอากาศตามช่วงเวลา (PNG, JPG, TIFF)",
@@ -674,18 +673,18 @@ uploaded_files = st.file_uploader(
 image_configs = []
 
 if uploaded_files:
-    st.markdown("#### 📝 กำหนดวันที่และสเกลความละเอียดของแต่ละภาพ")
+    st.markdown("#### กำหนดวันที่และสเกลความละเอียดของแต่ละภาพ")
     n_files = len(uploaded_files)
     current_year = datetime.now().year
 
     for i, up_file in enumerate(uploaded_files):
-        with st.expander(f"🖼️ ภาพที่ {i + 1}: {up_file.name}", expanded=(n_files <= 3)):
+        with st.expander(f"ภาพที่ {i + 1}: {up_file.name}", expanded=(n_files <= 3)):
             col1, col2 = st.columns(2)
             with col1:
                 detected_date = extract_date_from_filename(up_file.name)
                 if detected_date is not None:
                     default_date_str = detected_date.isoformat()
-                    st.caption(f"🔎 ตรวจพบวันที่จากชื่อไฟล์: **{default_date_str}**")
+                    st.caption(f"ตรวจพบวันที่จากชื่อไฟล์: **{default_date_str}**")
                 else:
                     default_date_str = str(current_year - (n_files - 1 - i))
                 date_str = st.text_input(
@@ -702,7 +701,7 @@ if uploaded_files:
                 )
             image_configs.append({"file": up_file, "date_str": date_str, "scale": scale_val})
 else:
-    st.info("👆 กรุณาอัปโหลดภาพชายฝั่งอย่างน้อย 2 ช่วงเวลาเพื่อเริ่มต้นการวิเคราะห์")
+    st.info("กรุณาอัปโหลดภาพชายฝั่งอย่างน้อย 2 ช่วงเวลาเพื่อเริ่มต้นการวิเคราะห์")
 
 
 # ==============================================================================
@@ -718,19 +717,19 @@ def run_pipeline(configs, blur_kernel, land_is_bright, segmentation_mode, max_di
         up_file = cfg["file"]
         d = parse_date_input(cfg["date_str"])
         if d is None:
-            errors.append(f"⚠️ ไม่สามารถแปลงวันที่ '{cfg['date_str']}' ของ '{up_file.name}' ได้ — ข้ามภาพนี้")
+            errors.append(f"ไม่สามารถแปลงวันที่ '{cfg['date_str']}' ของ '{up_file.name}' ได้ — ข้ามภาพนี้")
             continue
         try:
             img_bgr = load_image_bgr(up_file)
         except Exception as exc:
-            errors.append(f"⚠️ อ่านไฟล์ภาพ '{up_file.name}' ไม่สำเร็จ ({exc}) — ข้ามภาพนี้")
+            errors.append(f"อ่านไฟล์ภาพ '{up_file.name}' ไม่สำเร็จ ({exc}) — ข้ามภาพนี้")
             continue
 
         if auto_crop_banner:
             img_bgr, top_cut, bottom_cut = auto_crop_ui_chrome(img_bgr)
             if top_cut or bottom_cut:
                 errors.append(
-                    f"ℹ️ ตัดแถบ UI ของ '{up_file.name}' ออกอัตโนมัติ (บน {top_cut}px / ล่าง {bottom_cut}px)"
+                    f"ตัดแถบ UI ของ '{up_file.name}' ออกอัตโนมัติ (บน {top_cut}px / ล่าง {bottom_cut}px)"
                 )
 
         resized_img, eff_scale, was_resized, orig_shape, new_shape = resize_for_processing(
@@ -774,12 +773,12 @@ def run_pipeline(configs, blur_kernel, land_is_bright, segmentation_mode, max_di
 
         coast = extract_clean_coastline(binary_mask, denoise_kernel, keep_largest_only, channel_sever_kernel)
         if coast is None:
-            errors.append(f"⚠️ ไม่พบแนวชายฝั่งในภาพ '{item['file_name']}' หลังการประมวลผล — ข้ามภาพนี้")
+            errors.append(f"ไม่พบแนวชายฝั่งในภาพ '{item['file_name']}' หลังการประมวลผล — ข้ามภาพนี้")
             continue
 
         fd_res = robust_box_counting(coast["shoreline_img"])
         if fd_res is None:
-            errors.append(f"⚠️ คำนวณ Box-Counting ภาพ '{item['file_name']}' ไม่สำเร็จ — ข้ามภาพนี้")
+            errors.append(f"คำนวณ Box-Counting ภาพ '{item['file_name']}' ไม่สำเร็จ — ข้ามภาพนี้")
             continue
 
         overlay = create_coastline_overlay(current_bgr, coast["shoreline_img"])
@@ -822,7 +821,7 @@ def run_pipeline(configs, blur_kernel, land_is_bright, segmentation_mode, max_di
 
 
 analyze_clicked = st.button(
-    "🔍 เริ่มการวิเคราะห์แนวชายฝั่ง (Run Analyzer v5.0)",
+    "เริ่มการวิเคราะห์แนวชายฝั่ง (Run Analyzer v5.0)",
     type="primary",
     disabled=(len(image_configs) == 0),
 )
@@ -863,11 +862,11 @@ if st.session_state.get("processed"):
     # 2. IMAGE PREVIEWS & OVERLAYS
     # --------------------------------------------------------------------
     st.markdown("---")
-    st.subheader("🖼️ 2. ภาพผลลัพธ์การสกัดแนวชายฝั่ง (Clean Shoreline Overlay)")
+    st.subheader("2. ภาพผลลัพธ์การสกัดแนวชายฝั่ง (Clean Shoreline Overlay)")
 
     for r in results:
         resize_info = f" (ย่อจาก {r['original_shape'][1]}x{r['original_shape'][0]})" if r["was_resized"] else ""
-        st.markdown(f"**📅 {r['date'].isoformat()}** — {r['file_name']}  |  `{r['align_status']}`")
+        st.markdown(f"**{r['date'].isoformat()}** — {r['file_name']}  |  `{r['align_status']}`")
 
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -875,7 +874,7 @@ if st.session_state.get("processed"):
         with c2:
             st.image(r["filled_land"], caption="มาสก์แผ่นดินผืนหลัก (Solid Land)", use_container_width=True)
         with c3:
-            st.image(r["overlay_img"], channels="BGR", caption="🟩 แนวชายฝั่งไร้ขอบเฟรม (True Shoreline)", use_container_width=True)
+            st.image(r["overlay_img"], channels="BGR", caption="แนวชายฝั่งไร้ขอบเฟรม (True Shoreline)", use_container_width=True)
 
         st.caption(
             f"ความยาวแนวชายฝั่งจริง: **{r['coastline_length_px']:,.0f} px** (ประมาณ {r['coastline_length_px'] * r['scale_m_per_px']:,.1f} ม.)  •  "
@@ -945,7 +944,7 @@ if st.session_state.get("processed"):
     # 3. INTERACTIVE MULTI-TEMPORAL SHORELINE MAP WITH TRANSECTS
     # --------------------------------------------------------------------
     st.markdown("---")
-    st.subheader("🗺️ 3. แผนที่เปรียบเทียบแนวชายฝั่งทุกช่วงเวลา (Multi-Temporal Shoreline Map)")
+    st.subheader("3. แผนที่เปรียบเทียบแนวชายฝั่งทุกช่วงเวลา (Multi-Temporal Shoreline Map)")
 
     show_transects = st.checkbox("แสดงเส้นสำรวจตัดขวาง (Virtual Transects)", value=True)
 
@@ -1008,7 +1007,7 @@ if st.session_state.get("processed"):
     # --------------------------------------------------------------------
     if latest_transect_details:
         st.markdown("---")
-        st.subheader("📍 4. การกระจายตัวของการเปลี่ยนแปลงตามแนวชายฝั่ง (Spatial Transect Profile)")
+        st.subheader("4. การกระจายตัวของการเปลี่ยนแปลงตามแนวชายฝั่ง (Spatial Transect Profile)")
         st.caption(f"เปรียบเทียบการเคลื่อนที่ระหว่างปีฐาน ({baseline['date'].isoformat()}) กับปีล่าสุด ({results[-1]['date'].isoformat()})")
 
         t_df = pd.DataFrame(latest_transect_details)
@@ -1030,7 +1029,7 @@ if st.session_state.get("processed"):
     # 5. SCIENTIFIC SUMMARY TABLE
     # --------------------------------------------------------------------
     st.markdown("---")
-    st.subheader("📊 5. ตารางสรุปผลข้อมูลเชิงปริมาณ (Shoreline Dynamics Summary)")
+    st.subheader("5. ตารางสรุปผลข้อมูลเชิงปริมาณ (Shoreline Dynamics Summary)")
 
     display_table = summary_df.rename(columns={
         "Date": "วันที่",
@@ -1067,7 +1066,7 @@ if st.session_state.get("processed"):
     # 6. BOX-COUNTING DIAGNOSTIC
     # --------------------------------------------------------------------
     st.markdown("---")
-    st.subheader("📐 6. การตรวจสอบ Box-Counting (Morphological Complexity Diagnostic)")
+    st.subheader("6. การตรวจสอบ Box-Counting (Morphological Complexity Diagnostic)")
     file_labels = [f"{r['date'].isoformat()} — {r['file_name']}" for r in results]
     selected_label = st.selectbox("เลือกภาพเพื่อตรวจสอบกราฟ Log-Log Regression:", file_labels)
     selected_idx = file_labels.index(selected_label)
@@ -1094,7 +1093,7 @@ if st.session_state.get("processed"):
     st.plotly_chart(fig_diag, use_container_width=True)
 
     st.info(
-        "💡 **คำแนะนำทางวิทยาศาสตร์เกี่ยวกับค่า FD:** Fractal Dimension สะท้อน **'ความขรุขระและความซับซ้อนเชิงเรขาคณิต'** ของแนวชายฝั่ง "
+        "**คำแนะนำทางวิทยาศาสตร์เกี่ยวกับค่า FD:** Fractal Dimension สะท้อน **'ความขรุขระและความซับซ้อนเชิงเรขาคณิต'** ของแนวชายฝั่ง "
         "ค่า FD สูงหมายถึงชายฝั่งเว้าแหว่งหรือมีหัวแหลมซับซ้อน ค่า FD ต่ำเข้าใกล้ 1.0 หมายถึงชายหาดทอดตัวเป็นเส้นตรงเรียบ "
         "**ค่า FD ไม่ได้แปลว่าเกิดการกัดเซาะหรือการงอกโดยตรง** การประเมินการเคลื่อนที่ทางกายภาพต้องพิจารณาจากผลลัพธ์ของ Virtual Transects ในข้อ 4 และ 5"
     )
@@ -1103,7 +1102,7 @@ if st.session_state.get("processed"):
     # 7. DIRECT SPATIAL & FD FORECASTING
     # --------------------------------------------------------------------
     st.markdown("---")
-    st.subheader("🔮 7. การพยากรณ์การเคลื่อนตัวของแนวชายฝั่งล่วงหน้า (Linear Trend Forecasting)")
+    st.subheader("7. การพยากรณ์การเคลื่อนตัวของแนวชายฝั่งล่วงหน้า (Linear Trend Forecasting)")
 
     if len(results) < MIN_IMAGES_FOR_TRENDS:
         st.warning(f"ต้องใช้ข้อมูลภาพอย่างน้อย {MIN_IMAGES_FOR_TRENDS} ช่วงเวลาเพื่อสร้างแบบจำลองแนวโน้ม")
@@ -1175,7 +1174,7 @@ if st.session_state.get("processed"):
             )
 
         st.caption(
-            f"📈 สมการอัตราการเปลี่ยนแปลงเฉลี่ย: Shift = {shift_model.coef_[0]:+.3f} ม./ปี × Year + ({shift_model.intercept_:.2f}) (R² = {r2_shift:.4f})"
+            f"สมการอัตราการเปลี่ยนแปลงเฉลี่ย: Shift = {shift_model.coef_[0]:+.3f} ม./ปี × Year + ({shift_model.intercept_:.2f}) (R² = {r2_shift:.4f})"
         )
 
         # Plot Forecast Chart
@@ -1203,7 +1202,7 @@ if st.session_state.get("processed"):
     # 8. DOWNLOAD CSV REPORT
     # --------------------------------------------------------------------
     st.markdown("---")
-    st.subheader("💾 8. ดาวน์โหลดรายงานผลการวิเคราะห์")
+    st.subheader("8. ดาวน์โหลดรายงานผลการวิเคราะห์")
 
     export_df = summary_df.rename(columns={
         "Date": "วันที่",
@@ -1224,7 +1223,7 @@ if st.session_state.get("processed"):
     csv_data = export_df.to_csv(index=False).encode("utf-8-sig")
 
     st.download_button(
-        label="⬇️ ดาวน์โหลดรายงานสรุป CSV (UTF-8)",
+        label="ดาวน์โหลดรายงานสรุป CSV (UTF-8)",
         data=csv_data,
         file_name="coastal_erosion_report_v5.csv",
         mime="text/csv",
