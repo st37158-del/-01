@@ -284,7 +284,6 @@ def align_image_orb(target_bgr: np.ndarray, ref_bgr: np.ndarray, max_features: i
 def extract_binary_mask(img_bgr: np.ndarray, method: str, blur_kernel: int, land_is_bright: bool) -> Tuple[np.ndarray, np.ndarray, float]:
     """Segment land from water using Otsu thresholding or HSV water color detection."""
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (blur_kernel, blur_kernel), 0)
 
     if method == "HSV Color Segmentation (แยกสีน้ำทะเลและแผ่นดิน)":
         hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
@@ -295,6 +294,7 @@ def extract_binary_mask(img_bgr: np.ndarray, method: str, blur_kernel: int, land
         binary = cv2.bitwise_not(water_mask)  # Land = 255, Water = 0
         thresh_val = 0.0
     else:  # Otsu Thresholding (Grayscale / NDWI)
+        blurred = cv2.GaussianBlur(gray, (blur_kernel, blur_kernel), 0)
         thresh_val, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         if not land_is_bright:
             binary = cv2.bitwise_not(binary)
@@ -378,7 +378,6 @@ def extract_clean_coastline(binary_mask: np.ndarray, denoise_kernel: int, keep_l
     shore_lines = split_into_polylines(shore_pts)
 
     return {
-        "cleaned_mask": cleaned,
         "filled_land": filled_land,
         "shoreline_img": true_shoreline,
         "shore_pts": shore_pts,
@@ -653,13 +652,12 @@ segmentation_mode = st.sidebar.radio(
     help="หากเป็นภาพดัชนี NDWI หรือภาพขาวดำ ให้เลือก Otsu หากเป็นภาพถ่ายสีจากดาวเทียมทั่วไปให้ลองใช้ HSV"
 )
 
-blur_kernel = st.sidebar.slider(
-    "ขนาด Kernel สำหรับ Gaussian Blur (เลขคี่)",
-    min_value=3, max_value=15, value=5, step=2,
-    help="ลดจุดรบกวนก่อนทำ Segmentation"
-)
-
 if segmentation_mode == "Otsu Thresholding (Grayscale / NDWI)":
+    blur_kernel = st.sidebar.slider(
+        "ขนาด Kernel สำหรับ Gaussian Blur (เลขคี่)",
+        min_value=3, max_value=15, value=5, step=2,
+        help="ลดจุดรบกวนก่อนทำ Segmentation"
+    )
     land_choice = st.sidebar.radio(
         "พิกเซลสีไหนแทน 'แผ่นดิน' หลังทำ Threshold?",
         ["สว่าง (255) = แผ่นดิน", "มืด (0) = แผ่นดิน"],
@@ -667,7 +665,9 @@ if segmentation_mode == "Otsu Thresholding (Grayscale / NDWI)":
     )
     land_is_bright = (land_choice == "สว่าง (255) = แผ่นดิน")
 else:
-    # HSV mode classifies land/water by hue directly, so brightness polarity doesn't apply.
+    # HSV mode classifies land/water by hue directly -- it never touches the blurred
+    # grayscale image or the brightness polarity, so neither control applies.
+    blur_kernel = 5
     land_is_bright = True
 
 denoise_kernel = st.sidebar.slider(
@@ -877,7 +877,6 @@ def run_pipeline(configs, blur_kernel, land_is_bright, segmentation_mode, max_di
             "was_resized": item["was_resized"],
             "display_img": current_bgr,
             "overlay_img": overlay,
-            "cleaned_mask": coast["cleaned_mask"],
             "shoreline_img": coast["shoreline_img"],
             "shore_pts": coast["shore_pts"],
             "shore_lines": coast["shore_lines"],
