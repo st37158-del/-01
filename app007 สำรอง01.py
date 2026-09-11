@@ -742,7 +742,7 @@ if uploaded_files:
             with col2:
                 scale_val = st.number_input(
                     "สเกลความละเอียดเชิงพื้นที่ (เมตร/พิกเซล)",
-                    min_value=0.0001, value=1.0, step=0.1, format="%.4f",
+                    min_value=0.0001, value=0.1, step=0.1, format="%.4f",
                     key=f"scale_input_{i}_{up_file.name}",
                 )
             image_configs.append({"file": up_file, "date_str": date_str, "scale": scale_val})
