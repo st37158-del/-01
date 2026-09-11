@@ -371,18 +371,23 @@ def extract_clean_coastline(binary_mask: np.ndarray, denoise_kernel: int, keep_l
         return None
 
     shore_pts = np.column_stack([shore_x, shore_y])
-    land_area_px = float(np.count_nonzero(filled_land))
-    coastline_length_px = float(len(shore_pts))
 
     # Split shoreline points into continuous polylines for smooth plotting
     shore_lines = split_into_polylines(shore_pts)
+
+    # True path (arc) length along each polyline -- NOT a raw pixel count, which
+    # systematically undercounts a diagonal coastline by up to ~29% (each diagonal
+    # step covers sqrt(2) physical distance per pixel, not 1).
+    coastline_length_px = sum(
+        float(np.sum(np.hypot(*np.diff(line, axis=0).T)))
+        for line in shore_lines if len(line) >= 2
+    )
 
     return {
         "filled_land": filled_land,
         "shoreline_img": true_shoreline,
         "shore_pts": shore_pts,
         "shore_lines": shore_lines,
-        "land_area_px": land_area_px,
         "coastline_length_px": coastline_length_px,
         "contours_used": contours_used,
     }
@@ -823,10 +828,10 @@ def run_pipeline(configs, blur_kernel, land_is_bright, segmentation_mode, max_di
                 # relative to the pond network, ballooning the traced shoreline length.
                 # Comparing against this same image's own unaligned extraction (rather
                 # than the baseline's) isolates exactly what alignment changed.
-                gray_u, bm_u, _ = extract_binary_mask(current_bgr, segmentation_mode, blur_kernel, land_is_bright)
+                _, bm_u, _ = extract_binary_mask(current_bgr, segmentation_mode, blur_kernel, land_is_bright)
                 coast_u = extract_clean_coastline(bm_u, denoise_kernel, keep_largest_only, channel_sever_kernel)
 
-                gray_a, bm_a, _ = extract_binary_mask(aligned_bgr, segmentation_mode, blur_kernel, land_is_bright)
+                _, bm_a, _ = extract_binary_mask(aligned_bgr, segmentation_mode, blur_kernel, land_is_bright)
                 coast_a = extract_clean_coastline(bm_a, denoise_kernel, keep_largest_only, channel_sever_kernel)
 
                 length_u = coast_u["coastline_length_px"] if coast_u else 0.0
@@ -850,7 +855,7 @@ def run_pipeline(configs, blur_kernel, land_is_bright, segmentation_mode, max_di
                     coast = coast_u
 
         if coast is None:
-            gray, binary_mask, otsu_val = extract_binary_mask(
+            _, binary_mask, _ = extract_binary_mask(
                 current_bgr, segmentation_mode, blur_kernel, land_is_bright
             )
             coast = extract_clean_coastline(binary_mask, denoise_kernel, keep_largest_only, channel_sever_kernel)
@@ -881,7 +886,6 @@ def run_pipeline(configs, blur_kernel, land_is_bright, segmentation_mode, max_di
             "shore_pts": coast["shore_pts"],
             "shore_lines": coast["shore_lines"],
             "filled_land": coast["filled_land"],
-            "land_area_px": coast["land_area_px"],
             "coastline_length_px": coast["coastline_length_px"],
             "fd": fd_res["fd"],
             "fd_r2": fd_res["r_squared"],
@@ -991,7 +995,6 @@ if st.session_state.get("processed"):
             row["Status"] = "ข้อมูลฐานอ้างอิง (Baseline)"
         else:
             prev = results[idx - 1]
-            dt_step = r["decimal_year"] - prev["decimal_year"]
             dt_base = r["decimal_year"] - baseline["decimal_year"]
 
             # Compute shift relative to previous step
