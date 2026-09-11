@@ -648,7 +648,7 @@ auto_crop_banner = st.sidebar.checkbox(
 segmentation_mode = st.sidebar.radio(
     "โหมดการจำแนกแผ่นดินและน้ำ (Segmentation)",
     ["Otsu Thresholding (Grayscale / NDWI)", "HSV Color Segmentation (แยกสีน้ำทะเลและแผ่นดิน)"],
-    index=0,
+    index=1,
     help="หากเป็นภาพดัชนี NDWI หรือภาพขาวดำ ให้เลือก Otsu หากเป็นภาพถ่ายสีจากดาวเทียมทั่วไปให้ลองใช้ HSV"
 )
 
