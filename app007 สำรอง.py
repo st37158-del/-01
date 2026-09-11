@@ -212,13 +212,27 @@ def auto_crop_ui_chrome(img_bgr: np.ndarray, dominant_frac_thresh: float = 0.4,
 # IMAGE REGISTRATION & CO-REGISTRATION (ORB HOMOGRAPHY)
 # ==============================================================================
 
-def align_image_orb(target_bgr: np.ndarray, ref_bgr: np.ndarray, max_features: int = 1500) -> Tuple[np.ndarray, bool, str]:
+def align_image_orb(target_bgr: np.ndarray, ref_bgr: np.ndarray, max_features: int = 1500,
+                    max_warp_frac: float = 0.20) -> Tuple[np.ndarray, bool, str]:
     """
     Co-registers target_bgr to ref_bgr coordinate space using ORB feature matching and Homography.
     Prevents false shoreline shifts caused by slight camera offsets or varying crops.
+
+    Two safeguards protect against repetitive/periodic scenes (e.g. grid-like aquaculture
+    ponds or farmland) where ORB+RANSAC can lock onto a self-consistent but spatially WRONG
+    correspondence -- matching one grid cell to a visually-identical neighboring one:
+    1. A fixed RNG seed makes RANSAC's homography estimate reproducible across runs on the
+       same inputs (OpenCV's RANSAC is otherwise randomized, so re-running the exact same
+       alignment could silently produce a different -- possibly bad -- result each time).
+    2. The resulting homography is sanity-checked by warping a dense grid of sample points
+       and rejecting the fit if any point would be displaced by more than max_warp_frac of
+       the image diagonal -- a plausible registration correction should stay small, not
+       warp the image by a large fraction of its own size.
     """
     if target_bgr.shape[:2] == ref_bgr.shape[:2] and np.array_equal(target_bgr, ref_bgr):
         return target_bgr, True, "ภาพอ้างอิงฐาน (Reference Baseline)"
+
+    cv2.setRNGSeed(42)
 
     orb = cv2.ORB_create(max_features)
     gray_tgt = cv2.cvtColor(target_bgr, cv2.COLOR_BGR2GRAY)
@@ -244,6 +258,20 @@ def align_image_orb(target_bgr: np.ndarray, ref_bgr: np.ndarray, max_features: i
     H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
     if H is None:
         return target_bgr, False, "คำนวณ Homography Matrix ไม่สำเร็จ (ใช้ภาพเดิม)"
+
+    h, w = target_bgr.shape[:2]
+    gx, gy = np.meshgrid(np.linspace(0, w - 1, 12), np.linspace(0, h - 1, 12))
+    grid_pts = np.stack([gx.ravel(), gy.ravel()], axis=1).astype(np.float32).reshape(-1, 1, 2)
+    warped_pts = cv2.perspectiveTransform(grid_pts, H).reshape(-1, 2)
+    displacement = np.linalg.norm(warped_pts - grid_pts.reshape(-1, 2), axis=1)
+    diagonal = float(np.hypot(w, h))
+    max_shift_frac = float(displacement.max() / diagonal)
+
+    if max_shift_frac > max_warp_frac:
+        return target_bgr, False, (
+            f"Homography บิดภาพเกินสมเหตุสมผล ({max_shift_frac * 100:.0f}% ของภาพ) "
+            f"อาจเกิดจากลวดลายซ้ำในภาพ (เช่น บ่อกุ้ง/นาเกลือ) หลอก Feature Matching — ใช้ภาพเดิม (ไม่ Alignment)"
+        )
 
     aligned = cv2.warpPerspective(target_bgr, H, (ref_bgr.shape[1], ref_bgr.shape[0]))
     return aligned, True, f"จัดตำแหน่งภาพตรงกันเรียบร้อย ({len(good_matches)} จุดคู่สมนัย)"
@@ -676,6 +704,12 @@ max_dim = st.sidebar.slider(
 # ==============================================================================
 st.subheader("1. อัปโหลดภาพชายฝั่งหลายช่วงเวลา")
 
+st.caption(
+    "ยังไม่มีภาพ? ดาวน์โหลดภาพดาวเทียม Sentinel-2 (NDWI) ได้ฟรีจาก "
+    "[Copernicus Browser](https://browser.dataspace.copernicus.eu/) — เลือกพื้นที่ชายฝั่งที่ต้องการ "
+    "ตั้งค่า Visualization เป็น NDWI เลือกช่วงวันที่ แล้วกด Export Image เพื่อบันทึกไฟล์"
+)
+
 uploaded_files = st.file_uploader(
     "อัปโหลดภาพถ่ายดาวเทียม/ภาพถ่ายทางอากาศตามช่วงเวลา (PNG, JPG, TIFF)",
     type=SUPPORTED_TYPES,
@@ -770,25 +804,57 @@ def run_pipeline(configs, blur_kernel, land_is_bright, segmentation_mode, max_di
 
     results = []
 
+    max_align_length_change_frac = 0.20
+
     for idx, item in enumerate(parsed_configs):
         current_bgr = item["img_bgr"]
         current_scale = item["scale"]
         align_msg = "ภาพฐานอ้างอิง (Baseline)"
+        coast = None
 
         # Apply ORB Homography Alignment if enabled and not the reference image
         if enable_alignment and idx > 0:
             aligned_bgr, success, align_msg = align_image_orb(current_bgr, ref_image_bgr)
             if success:
-                current_bgr = aligned_bgr
-                # Warped onto the reference's pixel grid, so the reference's scale now
-                # applies -- the image's own pre-alignment scale no longer matches its pixels.
-                current_scale = ref_scale
+                # Sanity-check the alignment against its actual effect on the extracted
+                # shoreline, not just the raw geometric warp -- a repetitive scene (e.g.
+                # grid-like ponds/farmland) can produce a homography that looks small and
+                # plausible in pixel-displacement terms yet still shifts the boundary
+                # relative to the pond network, ballooning the traced shoreline length.
+                # Comparing against this same image's own unaligned extraction (rather
+                # than the baseline's) isolates exactly what alignment changed.
+                gray_u, bm_u, _ = extract_binary_mask(current_bgr, segmentation_mode, blur_kernel, land_is_bright)
+                coast_u = extract_clean_coastline(bm_u, denoise_kernel, keep_largest_only, channel_sever_kernel)
 
-        gray, binary_mask, otsu_val = extract_binary_mask(
-            current_bgr, segmentation_mode, blur_kernel, land_is_bright
-        )
+                gray_a, bm_a, _ = extract_binary_mask(aligned_bgr, segmentation_mode, blur_kernel, land_is_bright)
+                coast_a = extract_clean_coastline(bm_a, denoise_kernel, keep_largest_only, channel_sever_kernel)
 
-        coast = extract_clean_coastline(binary_mask, denoise_kernel, keep_largest_only, channel_sever_kernel)
+                length_u = coast_u["coastline_length_px"] if coast_u else 0.0
+                length_a = coast_a["coastline_length_px"] if coast_a else 0.0
+                length_change_frac = (
+                    abs(length_a - length_u) / length_u if length_u > 0 else 1.0
+                )
+
+                if coast_a is not None and length_change_frac <= max_align_length_change_frac:
+                    current_bgr = aligned_bgr
+                    # Warped onto the reference's pixel grid, so the reference's scale now
+                    # applies -- the image's own pre-alignment scale no longer matches its pixels.
+                    current_scale = ref_scale
+                    coast = coast_a
+                else:
+                    align_msg = (
+                        f"Alignment ทำให้ความยาวแนวชายฝั่งที่สกัดได้เปลี่ยนผิดปกติ "
+                        f"({length_change_frac * 100:.0f}%) อาจเกิดจากลวดลายซ้ำในภาพ (เช่น บ่อกุ้ง/นาเกลือ) "
+                        f"หลอก Feature Matching — ใช้ภาพเดิม (ไม่ Alignment)"
+                    )
+                    coast = coast_u
+
+        if coast is None:
+            gray, binary_mask, otsu_val = extract_binary_mask(
+                current_bgr, segmentation_mode, blur_kernel, land_is_bright
+            )
+            coast = extract_clean_coastline(binary_mask, denoise_kernel, keep_largest_only, channel_sever_kernel)
+
         if coast is None:
             errors.append(f"ไม่พบแนวชายฝั่งในภาพ '{item['file_name']}' หลังการประมวลผล — ข้ามภาพนี้")
             continue
