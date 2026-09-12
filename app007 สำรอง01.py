@@ -1203,6 +1203,7 @@ if st.session_state.get("processed"):
         # 2. FD Trend Model
         fd_model = LinearRegression()
         fd_model.fit(years, fds)
+        r2_fd = fd_model.score(years, fds)
 
         # Forecasts always start from the latest year with real measured data --
         # earlier years are the training data for the regression, not valid start points.
@@ -1246,6 +1247,9 @@ if st.session_state.get("processed"):
 
         st.caption(
             f"สมการอัตราการเปลี่ยนแปลงเฉลี่ย: Shift = {shift_model.coef_[0]:+.3f} ม./ปี × Year + ({shift_model.intercept_:.2f}) (R² = {r2_shift:.4f})"
+        )
+        st.caption(
+            f"สมการแนวโน้ม FD: FD = {fd_model.coef_[0]:+.5f} × Year + ({fd_model.intercept_:.4f}) (R² = {r2_fd:.4f})"
         )
 
         fd_slope = fd_model.coef_[0]
