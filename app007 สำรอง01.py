@@ -1000,7 +1000,7 @@ if st.session_state.get("processed"):
             )
 
             # Compute cumulative shift relative to baseline (t0)
-            cum_m, _, _, _, _, _ = measure_transect_shifts(
+            cum_m, _, _, _, _, cum_t_details = measure_transect_shifts(
                 baseline["shore_pts"], r["shore_pts"], transects, r["scale_m_per_px"]
             )
 
@@ -1016,7 +1016,7 @@ if st.session_state.get("processed"):
             row["Status"] = classify_change(m_s)
 
             if idx == len(results) - 1:
-                latest_transect_details = t_details
+                latest_transect_details = cum_t_details
 
         summary_rows.append(row)
 
