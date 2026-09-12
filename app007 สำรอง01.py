@@ -1216,13 +1216,15 @@ if st.session_state.get("processed"):
 
         forecast_rows = []
         base_f = float(base_year)
-        prev_cum = float(shift_model.predict([[base_f]])[0])
+        base_cum = float(shift_model.predict([[base_f]])[0])
+        prev_cum = base_cum
 
         for n in range(1, int(horizon) + 1):
             future_y = base_f + n
             pred_cum = float(shift_model.predict([[future_y]])[0])
             pred_fd = float(fd_model.predict([[future_y]])[0])
             inc_shift = pred_cum - prev_cum
+            cum_from_base = pred_cum - base_cum
             prev_cum = pred_cum
 
             forecast_rows.append({
@@ -1230,7 +1232,7 @@ if st.session_state.get("processed"):
                 "ล่วงหน้า": f"+{n} ปี",
                 "ระยะสะสมที่พยากรณ์ (ม.)": pred_cum,
                 "เปลี่ยนแปลงจากปีก่อนหน้า (ม.)": inc_shift,
-                "สถานะ": classify_change(inc_shift),
+                "สถานะ": classify_change(cum_from_base),
                 "FD ที่พยากรณ์": pred_fd,
             })
 
