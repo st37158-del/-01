@@ -1260,34 +1260,3 @@ if st.session_state.get("processed"):
         st.caption(
             f"สมการอัตราการเปลี่ยนแปลงเฉลี่ย: Shift = {shift_model.coef_[0]:+.3f} ม./ปี × Year + ({shift_model.intercept_:.2f}) (R² = {r2_shift:.4f})"
         )
-
-    # --------------------------------------------------------------------
-    # 8. DOWNLOAD CSV REPORT
-    # --------------------------------------------------------------------
-    st.markdown("---")
-    st.subheader("8. ดาวน์โหลดรายงานผลการวิเคราะห์")
-
-    export_df = summary_df.rename(columns={
-        "Date": "วันที่",
-        "Decimal_Year": "ปี_ทศนิยม",
-        "Coastline_Length_m": "ความยาวชายฝั่ง_เมตร",
-        "Mean_Shift_m": "ระยะเฉลี่ย_เมตร",
-        "Median_Shift_m": "ระยะมัธยฐาน_เมตร",
-        "Std_Dev_m": "ความไม่แน่นอน_เมตร",
-        "Cumulative_Shift_m": "ระยะสะสม_เมตร",
-        "EPR_m_per_year": "EPR_เมตรต่อปี",
-        "Max_Erosion_m": "กัดเซาะสูงสุด_เมตร",
-        "Max_Accretion_m": "งอกสูงสุด_เมตร",
-        "FD": "ค่า_FD",
-        "FD_R2": "R2_ของ_FD",
-        "Status": "สถานะ",
-    })
-
-    csv_data = export_df.to_csv(index=False).encode("utf-8-sig")
-
-    st.download_button(
-        label="ดาวน์โหลดรายงานสรุป CSV (UTF-8)",
-        data=csv_data,
-        file_name="coastal_erosion_report_v5.csv",
-        mime="text/csv",
-    )
