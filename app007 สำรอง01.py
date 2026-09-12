@@ -1212,7 +1212,9 @@ if st.session_state.get("processed"):
 
         # Forecasts always start from the latest year with real measured data --
         # earlier years are the training data for the regression, not valid start points.
-        base_year = int(round(float(years.max())))
+        # Using the calendar year of the last date (not round(decimal year)) avoids
+        # a late-December date's fractional year (e.g. 2025.98) rounding up to 2026.
+        base_year = results[-1]["date"].year
         base_f = float(base_year)
         base_cum = float(shift_model.predict([[base_f]])[0])
 
