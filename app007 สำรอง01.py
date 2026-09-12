@@ -1221,7 +1221,8 @@ if st.session_state.get("processed"):
 
         forecast_rows = []
         base_f = float(base_year)
-        prev_cum = float(shift_model.predict([[base_f]])[0])
+        base_cum = float(shift_model.predict([[base_f]])[0])
+        prev_cum = base_cum
 
         for n in range(1, int(horizon) + 1):
             future_y = base_f + n
@@ -1251,10 +1252,11 @@ if st.session_state.get("processed"):
             )
         with col_m2:
             last_f = forecast_df.iloc[-1]
+            horizon_change_m = last_f["Cumulative_Distance_m"] - base_cum
             st.metric(
                 f"อีก {horizon} ปี ({last_f['Year']})",
                 f"ระยะสะสม {last_f['Cumulative_Distance_m']:+.2f} ม.",
-                delta=f"{last_f['Status']}",
+                delta=f"{horizon_change_m:+.2f} ม. ใน {horizon} ปี ({classify_change(horizon_change_m)})",
             )
 
         st.caption(
