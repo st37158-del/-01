@@ -1259,27 +1259,6 @@ if st.session_state.get("processed"):
             f"สมการอัตราการเปลี่ยนแปลงเฉลี่ย: Shift = {shift_model.coef_[0]:+.3f} ม./ปี × Year + ({shift_model.intercept_:.2f}) (R² = {r2_shift:.4f})"
         )
 
-        # Plot Forecast Chart
-        future_years = [base_f] + forecast_df["Year"].tolist()
-        future_shifts = [float(shift_model.predict([[base_f]])[0])] + forecast_df["Cumulative_Distance_m"].tolist()
-
-        fig_forecast = go.Figure()
-        fig_forecast.add_trace(go.Scatter(
-            x=summary_df["Decimal_Year"], y=cum_shifts,
-            mode="markers+lines", name="ระยะจริงย้อนหลัง",
-            line=dict(color="#1f77b4", width=2.5), marker=dict(size=8),
-        ))
-        fig_forecast.add_trace(go.Scatter(
-            x=future_years, y=future_shifts,
-            mode="lines+markers", name=f"พยากรณ์ล่วงหน้า (+{horizon} ปี)",
-            line=dict(color="#d62728", dash="dash", width=2), marker=dict(size=8, symbol="diamond"),
-        ))
-        fig_forecast.update_layout(
-            title="แนวโน้มและการพยากรณ์การเคลื่อนตัวของแนวชายฝั่ง (Shoreline Trend Forecast)",
-            xaxis_title="ปี (พ.ศ. / ค.ศ.)", yaxis_title="ระยะสะสมสุทธิ (เมตร)", height=430,
-        )
-        st.plotly_chart(fig_forecast, use_container_width=True)
-
     # --------------------------------------------------------------------
     # 8. DOWNLOAD CSV REPORT
     # --------------------------------------------------------------------
