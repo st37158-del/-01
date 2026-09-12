@@ -213,7 +213,7 @@ def auto_crop_ui_chrome(img_bgr: np.ndarray, dominant_frac_thresh: float = 0.4,
 # ==============================================================================
 
 def align_image_orb(target_bgr: np.ndarray, ref_bgr: np.ndarray, max_features: int = 1500,
-                    max_warp_frac: float = 0.20) -> Tuple[np.ndarray, bool, str]:
+                    max_warp_frac: float = 0.05) -> Tuple[np.ndarray, bool, str]:
     """
     Co-registers target_bgr to ref_bgr coordinate space using ORB feature matching and Homography.
     Prevents false shoreline shifts caused by slight camera offsets or varying crops.
@@ -636,7 +636,9 @@ st.sidebar.header("พารามิเตอร์การประมวล�
 enable_alignment = st.sidebar.checkbox(
     "เปิดใช้ Auto-Alignment (ORB Feature Matching)",
     value=True,
-    help="แนะนำให้เปิดไว้: จัดตำแหน่งและปรับมุมมองภาพทุกช่วงเวลาให้ตรงกับภาพฐานปีแรก ป้องกันความคลาดเคลื่อนเชิงตำแหน่ง"
+    help="แนะนำให้เปิดไว้: จัดตำแหน่งและปรับมุมมองภาพทุกช่วงเวลาให้ตรงกับภาพฐานปีแรก ป้องกันความคลาดเคลื่อนเชิงตำแหน่ง "
+         "(ปรับให้เข้มงวดขึ้นสำหรับภาพที่ถ่ายจากมุมมองเดิมทุกครั้ง เช่น ดาวน์โหลดจากเว็บวิวเดิมโดยเปลี่ยนแค่ปี — "
+         "ถ้าพบว่าต้องบิดภาพมากเกินคาด ระบบจะปฏิเสธการจัดตำแหน่งนั้นและใช้ภาพเดิมแทน เพื่อกันไม่ให้เส้นแนวชายฝั่งเบี้ยวจากการจับคู่ผิด)"
 )
 
 auto_crop_banner = st.sidebar.checkbox(
@@ -804,7 +806,7 @@ def run_pipeline(configs, blur_kernel, land_is_bright, segmentation_mode, max_di
 
     results = []
 
-    max_align_length_change_frac = 0.20
+    max_align_length_change_frac = 0.08
 
     for idx, item in enumerate(parsed_configs):
         current_bgr = item["img_bgr"]
