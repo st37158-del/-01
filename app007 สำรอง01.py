@@ -1195,6 +1195,11 @@ if st.session_state.get("processed"):
         cum_shifts = summary_df["Cumulative_Shift_m"].values
         fds = summary_df["FD"].values
 
+        # Linear Regression is kept as the trend model regardless of dataset size:
+        # with only a few dozen dates at most, a higher-order fit (e.g. polynomial)
+        # has little data to constrain its extra parameters and swings wildly the
+        # moment it's extrapolated even one year past the measured range -- a
+        # worse forecast than a straight line, not a better one.
         # 1. Spatial Trend Model (Cumulative Transect Shift vs Year)
         shift_model = LinearRegression()
         shift_model.fit(years, cum_shifts)
@@ -1205,60 +1210,41 @@ if st.session_state.get("processed"):
         fd_model.fit(years, fds)
         r2_fd = fd_model.score(years, fds)
 
-        last_year = float(years.max())
-
-        col_base, col_horizon = st.columns(2)
-        with col_base:
-            base_year = st.number_input(
-                "ปีฐานสำหรับเริ่มพยากรณ์",
-                min_value=1900, max_value=2200, value=int(round(last_year)), step=1,
-            )
-        with col_horizon:
-            horizon = st.number_input(
-                "ระยะเวลาที่ต้องการพยากรณ์ล่วงหน้า (ปี)",
-                min_value=1, max_value=30, value=5, step=1,
-            )
-
-        forecast_rows = []
+        # Forecasts always start from the latest year with real measured data --
+        # earlier years are the training data for the regression, not valid start points.
+        base_year = int(round(float(years.max())))
         base_f = float(base_year)
         base_cum = float(shift_model.predict([[base_f]])[0])
-        prev_cum = base_cum
 
-        for n in range(1, int(horizon) + 1):
+        FORECAST_HORIZON_YEARS = 5
+        st.caption(f"พยากรณ์ล่วงหน้า {FORECAST_HORIZON_YEARS} ปี ต่อจากปีล่าสุดที่มีข้อมูลจริง ({base_year})")
+
+        forecast_rows = []
+        for n in range(1, FORECAST_HORIZON_YEARS + 1):
             future_y = base_f + n
             pred_cum = float(shift_model.predict([[future_y]])[0])
             pred_fd = float(fd_model.predict([[future_y]])[0])
-            inc_shift = pred_cum - prev_cum
-            prev_cum = pred_cum
 
             forecast_rows.append({
-                "Year": int(base_year + n),
-                "Years_Ahead": f"+{n} ปี",
-                "Cumulative_Distance_m": pred_cum,
-                "Distance_Change_m": inc_shift,
-                "Predicted_FD": pred_fd,
-                "Status": classify_change(inc_shift),
+                "ปี": int(base_year + n),
+                "ล่วงหน้า": f"+{n} ปี",
+                "ระยะเปลี่ยนแปลงสะสมจากปีฐาน (ม.)": pred_cum - base_cum,
+                "FD ที่พยากรณ์": pred_fd,
             })
 
         forecast_df = pd.DataFrame(forecast_rows)
 
-        col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            first_f = forecast_df.iloc[0]
-            st.metric(
-                f"ปีถัดไป (+1 ปี, {first_f['Year']})",
-                f"{first_f['Distance_Change_m']:+.2f} ม./ปี",
-                delta=f"{first_f['Status']}",
-            )
-        with col_m2:
-            last_f = forecast_df.iloc[-1]
-            horizon_change_m = last_f["Cumulative_Distance_m"] - base_cum
-            st.metric(
-                f"อีก {horizon} ปี ({last_f['Year']})",
-                f"ระยะสะสม {last_f['Cumulative_Distance_m']:+.2f} ม.",
-                delta=f"{horizon_change_m:+.2f} ม. ใน {horizon} ปี ({classify_change(horizon_change_m)})",
-            )
+        st.dataframe(
+            forecast_df.style.format({
+                "ระยะเปลี่ยนแปลงสะสมจากปีฐาน (ม.)": "{:+.2f}",
+                "FD ที่พยากรณ์": "{:.4f}",
+            }),
+            use_container_width=True,
+        )
 
         st.caption(
             f"สมการอัตราการเปลี่ยนแปลงเฉลี่ย: Shift = {shift_model.coef_[0]:+.3f} ม./ปี × Year + ({shift_model.intercept_:.2f}) (R² = {r2_shift:.4f})"
+        )
+        st.caption(
+            f"สมการแนวโน้ม FD: FD = {fd_model.coef_[0]:+.5f} × Year + ({fd_model.intercept_:.4f}) (R² = {r2_fd:.4f})"
         )
