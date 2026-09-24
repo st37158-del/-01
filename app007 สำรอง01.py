@@ -1248,3 +1248,69 @@ if st.session_state.get("processed"):
         st.caption(
             f"สมการแนวโน้ม FD: FD = {fd_model.coef_[0]:+.5f} × Year + ({fd_model.intercept_:.4f}) (R² = {r2_fd:.4f})"
         )
+
+        # Regression charts: measured points, the fitted line over the measured range,
+        # a dashed extension through the forecast horizon, and the forecast years.
+        x_obs = summary_df["Decimal_Year"].values
+        date_labels = summary_df["Date"].values
+        x_fit = np.linspace(x_obs.min(), x_obs.max(), 50)
+        x_ext = np.linspace(x_obs.max(), base_f + FORECAST_HORIZON_YEARS, 20)
+        x_fc = np.array([base_f + n for n in range(1, FORECAST_HORIZON_YEARS + 1)])
+
+        def regression_chart(model, y_obs, r2, title, y_title, y_fmt, coef_fmt, color):
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=x_obs, y=y_obs, mode="markers", name="ค่าที่วัดได้จริง",
+                marker=dict(size=10, color=color),
+                customdata=date_labels,
+                hovertemplate="วันที่ %{customdata}<br>ค่า %{y:" + y_fmt + "}<extra></extra>",
+            ))
+            fig.add_trace(go.Scatter(
+                x=x_fit, y=model.predict(x_fit.reshape(-1, 1)), mode="lines",
+                name="เส้นถดถอยเชิงเส้น", line=dict(color="#222222", width=2.5),
+                hoverinfo="skip",
+            ))
+            fig.add_trace(go.Scatter(
+                x=x_ext, y=model.predict(x_ext.reshape(-1, 1)), mode="lines",
+                name="ส่วนต่อขยายเพื่อพยากรณ์", line=dict(color="#222222", width=2, dash="dash"),
+                hoverinfo="skip",
+            ))
+            fig.add_trace(go.Scatter(
+                x=x_fc, y=model.predict(x_fc.reshape(-1, 1)), mode="markers",
+                name=f"ค่าพยากรณ์ +1 ถึง +{FORECAST_HORIZON_YEARS} ปี",
+                marker=dict(size=10, color="white", line=dict(color=color, width=2.5)),
+                customdata=x_fc.astype(int),
+                hovertemplate="ปี %{customdata}<br>ค่าพยากรณ์ %{y:" + y_fmt + "}<extra></extra>",
+            ))
+            fig.add_vrect(
+                x0=x_obs.max(), x1=base_f + FORECAST_HORIZON_YEARS + 0.3,
+                fillcolor="#ff9f1c", opacity=0.10, line_width=0,
+                annotation_text="ช่วงพยากรณ์", annotation_position="top left",
+            )
+            equation = f"y = {model.coef_[0]:{coef_fmt}} x + ({model.intercept_:.4f})   R² = {r2:.4f}"
+            fig.update_layout(
+                title=f"{title}<br><sup>{equation}</sup>",
+                xaxis_title="ปี", yaxis_title=y_title, height=460,
+                legend=dict(orientation="h", yanchor="top", y=-0.22),
+            )
+            fig.update_xaxes(dtick=1, tickformat="d")
+            return fig
+
+        chart_col1, chart_col2 = st.columns(2)
+        with chart_col1:
+            st.plotly_chart(regression_chart(
+                shift_model, cum_shifts, r2_shift,
+                "ถดถอยเชิงเส้น: ระยะสะสมจากปีฐานเทียบกับเวลา",
+                "ระยะสะสมจากปีฐาน (ม.)", ".2f", "+.4f", "#1f77b4",
+            ), use_container_width=True)
+        with chart_col2:
+            st.plotly_chart(regression_chart(
+                fd_model, fds, r2_fd,
+                "ถดถอยเชิงเส้น: ค่า Fractal Dimension เทียบกับเวลา",
+                "Fractal Dimension", ".4f", "+.6f", "#2ca02c",
+            ), use_container_width=True)
+
+        st.caption(
+            "จุดทึบ = ค่าที่วัดได้จริง • เส้นทึบ = เส้นถดถอยในช่วงที่มีข้อมูล • เส้นประ = ส่วนต่อขยายไปยังช่วงพยากรณ์ • "
+            "จุดโปร่ง = ค่าพยากรณ์ของแต่ละปี • แถบสีส้ม = ช่วงพยากรณ์ (แกนตั้งเป็นค่าสะสมจากปีฐานแรก ส่วนตารางด้านบนแสดงผลต่างจากปีล่าสุด)"
+        )
